@@ -2,9 +2,15 @@
 
 #include <ESP32Servo.h>
 const int SIZE = 8;
+const int MAX_PARTICLES = 20;
+const int SPEED = 1000;
 int particles[SIZE][SIZE][SIZE];
-const int MAX_PARTICLES = 4;
 int particleCount = 0;
+
+//can be 1 or 0 or -1
+int yGrav = 1;
+int xGrav = 0;
+int zGrav = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -14,11 +20,9 @@ void loop() {
   createParticle(4,7,4);
   printThreeViews();
   simulateParticles();
-
-  Serial.println();
   //Serial.print(", ");
   //Serial.println(particles[6][0][4]);
-  delay(1000);
+  delay(SPEED);
 }
 
 void printThreeViews() {
@@ -37,9 +41,9 @@ void printThreeViews() {
 
     Serial.print("   |   ");
 
-    //show Y vs Z
-    int z2 = row;
-    for (int y = 0; y < SIZE; y++) {
+    //show Y vs Z (side view)
+    int y = SIZE - 1 - row;   // top row = highest y
+    for (int z2 = 0; z2 < SIZE; z2++) {
       int visible = 0;
       for (int x = 0; x < SIZE; x++) {
         visible |= particles[x][y][z2];
@@ -50,7 +54,7 @@ void printThreeViews() {
 
     Serial.print("   |   ");
 
-    //show X vs y
+    //show X vs y (side view)
     int y2 = SIZE - 1 - row;  // print top y first
     for (int x = 0; x < SIZE; x++) {
       int visible = 0;
@@ -64,6 +68,7 @@ void printThreeViews() {
     Serial.println();
   }
 
+  Serial.println();
   Serial.println();
 }
 void simulateParticles(){
