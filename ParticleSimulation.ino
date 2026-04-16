@@ -3,13 +3,15 @@
 #include <ESP32Servo.h>
 const int SIZE = 8;
 int particles[SIZE][SIZE][SIZE];
+const int MAX_PARTICLES = 4;
+int particleCount = 0;
 
 void setup() {
   Serial.begin(115200);
 }
 
 void loop() {
-  particles[4][7][4] = 1;
+  createParticle(4,7,4);
   printThreeViews();
   simulateParticles();
 
@@ -48,7 +50,7 @@ void printThreeViews() {
 
     Serial.print("   |   ");
 
-    //show X vs Y -----
+    //show X vs y
     int y2 = SIZE - 1 - row;  // print top y first
     for (int x = 0; x < SIZE; x++) {
       int visible = 0;
@@ -111,15 +113,40 @@ void updateParticle(int x, int y, int z){
     return;
   }
   else{
-    //no open spot below, don't don't move
+    //no open spot below, don't move
     return;
   }
 }
 
 void moveParticle(int x1, int y1, int z1, int x2, int y2, int z2){
   if(particles[x2][y2][z2] == 1){
-    throw std::runtime_error("Trying to move particle to unopen spot");
+    throw std::runtime_error("Trying to move particle to non empty spot");
   }
   particles[x1][y1][z1] = 0;
   particles[x2][y2][z2] = 1;
+}
+
+void createParticle(int x, int y, int z){
+  /* not sure if this should be an error
+
+   if(particles[x][y][z] == 1){
+     throw std::runtime_error("Trying to create particle in non empty spot");
+   }
+  */
+  if(particleCount >= MAX_PARTICLES){
+    return;
+  }
+  particles[x][y][z] = 1;
+  particleCount++;
+}
+
+void removeParticle(int x, int y, int z){
+   
+  /* not sure if this should be an error
+  if(particles[x][y][z] == 0){
+    throw std::runtime_error("Trying to remove particle in empy spot");
+  }
+  */
+   particles[x][y][z] = 0;
+   particleCount--;
 }
