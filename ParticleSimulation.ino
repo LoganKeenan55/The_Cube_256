@@ -3,7 +3,7 @@
 #include <ESP32Servo.h>
 const int SIZE = 8;
 const int MAX_PARTICLES = 20;
-const int SPEED = 1000;
+const int SPEED = 300;
 int particles[SIZE][SIZE][SIZE];
 int particleCount = 0;
 
@@ -25,44 +25,49 @@ void loop() {
   delay(SPEED);
 }
 
-void printThreeViews() {
-  for (int row = 0; row < SIZE; row++) {
+void printThreeViews()
+{
+  Serial.print("\033[2J");
+  Serial.print("\033[H");
 
-    //show X vs Z (top-down)
+  for (int row = 0; row < SIZE; row++){
+
+    // show X vs Z (top-down)
     int z = row;
-    for (int x = 0; x < SIZE; x++) {
-      int visible = 0;
-      for (int y = 0; y < SIZE; y++) {
+ for (int x = 0; x < SIZE; x++){
+   int visible = 0;
+      for (int y = 0; y < SIZE; y++){
         visible |= particles[x][y][z];
       }
-      Serial.print(visible);
-      Serial.print(" ");
+      if (visible) Serial.print("1 ");
+      else Serial.print("  ");
     }
 
     Serial.print("   |   ");
 
-    //show Y vs Z (side view)
-    int y = SIZE - 1 - row;   // top row = highest y
-    for (int z2 = 0; z2 < SIZE; z2++) {
+    // show Y vs Z (side view)
+    int y = SIZE - 1 - row; // top row = highest y
+    for (int z2 = 0; z2 < SIZE; z2++){
       int visible = 0;
-      for (int x = 0; x < SIZE; x++) {
+      for (int x = 0; x < SIZE; x++){
         visible |= particles[x][y][z2];
       }
-      Serial.print(visible);
-      Serial.print(" ");
+      if (visible) Serial.print("1 ");
+      else Serial.print("  ");
     }
 
     Serial.print("   |   ");
 
-    //show X vs y (side view)
-    int y2 = SIZE - 1 - row;  // print top y first
-    for (int x = 0; x < SIZE; x++) {
+    // show X vs y (side view)
+    int y2 = SIZE - 1 - row; // print top y first
+    for (int x = 0; x < SIZE; x++){
       int visible = 0;
-      for (int z3 = 0; z3 < SIZE; z3++) {
+      for (int z3 = 0; z3 < SIZE; z3++)
+      {
         visible |= particles[x][y2][z3];
       }
-      Serial.print(visible);
-      Serial.print(" ");
+      if (visible) Serial.print("1 ");
+      else Serial.print("  ");
     }
 
     Serial.println();
@@ -71,9 +76,10 @@ void printThreeViews() {
   Serial.println();
   Serial.println();
 }
+
 void simulateParticles(){
   for(int x = 0; x < SIZE; x++){
-    for(int y = 1; y < SIZE; y++){
+    for(int y = 0; y < SIZE; y++){
       for(int z = 0; z < SIZE; z++){
         if(particles[x][y][z] == 1){
           updateParticle(x,y,z);
@@ -90,7 +96,7 @@ void updateParticle(int x, int y, int z){
     return;
   }
   //in air
-  if(particles[x][y-1][z] == 0){
+  if(y >= 1 && particles[x][y-1][z] == 0){
     moveParticle(x,y,z,x,y-1,z);
     return;
   }
@@ -121,6 +127,23 @@ void updateParticle(int x, int y, int z){
     //no open spot below, don't move
     return;
   }
+}
+
+bool isInBounds(int x, int y, int z){
+  if(x >= SIZE -1 || x < 0){
+    return false;
+  }
+  if(y >= SIZE -1 || y < 0){
+    return false;
+  }
+  if(z >= SIZE -1 || z < 0){
+    return false;
+  }
+  return true;
+}
+
+void updateParticleBasedOnGravity(int x, int y, int z){
+ 
 }
 
 void moveParticle(int x1, int y1, int z1, int x2, int y2, int z2){
