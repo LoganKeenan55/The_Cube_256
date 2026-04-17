@@ -11,10 +11,12 @@ const int SPEED = 300;
 int particles[SIZE][SIZE][SIZE];
 int particleCount = 0;
 
+bool moved[SIZE][SIZE][SIZE];
+
 //can be 1 or 0 or -1
 int yGrav = -1;
-int xGrav = -1;
-int zGrav = 0;
+int xGrav = 0;
+int zGrav = 0 ;
 
 void setup() {
   Serial.begin(115200);
@@ -26,8 +28,8 @@ void setup() {
 void loop() {
   checkInput();
   createParticle(4,7,4);
-  printThreeViews();
   simulateParticles();
+  printThreeViews();
   //Serial.print(", ");
   //Serial.println(particles[6][0][4]);
   delay(SPEED);
@@ -35,8 +37,8 @@ void loop() {
 
 void checkInput(){
    if(digitalRead(button1)==0){
-    zGrav = 1;
-    yGrav = 0;
+    zGrav = 0;
+    yGrav = -1;
     xGrav = 0;
     delay(200); //debounce :D
    }
@@ -46,7 +48,7 @@ void checkInput(){
     xGrav = 0;
     delay(200); //debounce :D
    }
-   if(digitalRead(button2)==0){
+   if(digitalRead(button3)==0){
     zGrav = 0;
     yGrav = 0;
     xGrav = -1;
@@ -106,11 +108,25 @@ void printThreeViews()
   Serial.println();
 }
 
-void simulateParticles(){
+
+void clearMoved(){
   for(int x = 0; x < SIZE; x++){
     for(int y = 0; y < SIZE; y++){
       for(int z = 0; z < SIZE; z++){
-        if(particles[x][y][z] == 1){
+        moved[x][y][z] = false;
+      }
+    }
+  }
+}
+
+void simulateParticles(){
+
+  clearMoved();
+
+  for(int x = 0; x < SIZE; x++){
+    for(int y = 0; y < SIZE; y++){
+      for(int z = 0; z < SIZE; z++){
+        if(particles[x][y][z] == 1 && !moved[x][y][z]){
           updateParticleBasedOnGravity(x,y,z);
         }
       }
@@ -172,6 +188,9 @@ bool isInBounds(int x, int y, int z){
 }
 
 void updateParticleBasedOnGravity(int x, int y, int z){
+
+  moved[x][y][z] = true;
+
   int possibleMoves[7][3];
   int moveCount = 0;
 
@@ -225,6 +244,7 @@ void moveParticle(int x1, int y1, int z1, int x2, int y2, int z2){
   }
   particles[x1][y1][z1] = 0;
   particles[x2][y2][z2] = 1;
+  moved[x2][y2][z2] = true;
 }
 
 void createParticle(int x, int y, int z){
