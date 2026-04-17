@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include <ESP32Servo.h>
+#include <SSD1306Wire.h>
 
 #define button1 34 // speed up button pin
 #define button2 0// direction button pin
@@ -13,12 +13,21 @@ int particleCount = 0;
 
 bool moved[SIZE][SIZE][SIZE];
 
+//screen on makerboard
+SSD1306Wire lcd(0x3C, SDA, SCL);
+char text[200];
+
 //can be 1 or 0 or -1
 int yGrav = -1;
 int xGrav = 0;
 int zGrav = 0 ;
 
 void setup() {
+  lcd.init();
+  lcd.flipScreenVertically();
+  lcd.setFont(ArialMT_Plain_16);
+  lcd.clear();
+  lcd.display();
   Serial.begin(115200);
   pinMode(button1, INPUT);
   pinMode(button2, INPUT);
@@ -54,10 +63,20 @@ void checkInput(){
     xGrav = -1;
     delay(200); //debounce :D
    }
+     lcd.clear();
+   sprintf(text, "Xgrav: %d", xGrav);
+   lcd.drawString(0, 0, text);
+   sprintf(text, "Ygrav: %d", yGrav);
+   lcd.drawString(0, 16, text);
+   sprintf(text, "Zgrav: %d", zGrav);
+   lcd.drawString(0, 32, text);
+   lcd.display();
+
 }
 
 void printThreeViews()
 {
+  Serial.println();
   Serial.print("\033[2J");
   Serial.print("\033[H");
 
