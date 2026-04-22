@@ -6,8 +6,8 @@
 #define button3 35 // step mode button pin
 
 const int SIZE = 8;
-const int MAX_PARTICLES = 20;
-const int SPEED = 300;
+const int MAX_PARTICLES = 100;
+const int SPEED = 100;
 int particles[SIZE][SIZE][SIZE];
 int particleCount = 0;
 
@@ -44,33 +44,44 @@ void loop() {
   delay(SPEED);
 }
 
+
 void checkInput(){
    if(digitalRead(button1)==0){
-    zGrav = 0;
-    yGrav = -1;
-    xGrav = 0;
+    if(xGrav <=0){
+      xGrav++;
+    }
+    else{
+      xGrav = -1;
+    }
     delay(200); //debounce :D
    }
    if(digitalRead(button2)==0){
-    zGrav = -1;
-    yGrav = 0;
-    xGrav = 0;
+    if(yGrav <=0){
+      yGrav++;
+    }
+    else{
+      yGrav = -1;
+    }
     delay(200); //debounce :D
    }
    if(digitalRead(button3)==0){
-    zGrav = 0;
-    yGrav = 0;
-    xGrav = -1;
+    if(zGrav <=0){
+      zGrav++;
+    }
+    else{
+      zGrav = -1;
+    }
     delay(200); //debounce :D
    }
-     lcd.clear();
-   sprintf(text, "Xgrav: %d", xGrav);
-   lcd.drawString(0, 0, text);
-   sprintf(text, "Ygrav: %d", yGrav);
-   lcd.drawString(0, 16, text);
-   sprintf(text, "Zgrav: %d", zGrav);
-   lcd.drawString(0, 32, text);
-   lcd.display();
+
+    lcd.clear();
+    sprintf(text, "Xgrav: %d", xGrav);
+    lcd.drawString(0, 0, text);
+    sprintf(text, "Ygrav: %d", yGrav);
+    lcd.drawString(0, 16, text);
+    sprintf(text, "Zgrav: %d", zGrav);
+    lcd.drawString(0, 32, text);
+    lcd.display();
 
 }
 
@@ -142,54 +153,55 @@ void simulateParticles(){
 
   clearMoved();
 
-  for(int x = 0; x < SIZE; x++){
-    for(int y = 0; y < SIZE; y++){
-      for(int z = 0; z < SIZE; z++){
+  int xStart = 0, xEnd = SIZE, xStep = 1;
+  int yStart = 0, yEnd = SIZE, yStep = 1;
+  int zStart = 0, zEnd = SIZE, zStep = 1;
+
+  if (xGrav > 0) {
+    xStart = SIZE - 1; xEnd = -1; xStep = -1;
+  }
+  else if (xGrav < 0) {
+    xStart = 0; xEnd = SIZE; xStep = 1;
+  }
+
+  if (yGrav > 0) {
+    yStart = SIZE - 1; yEnd = -1; yStep = -1;
+  }
+  else if (yGrav < 0) {
+    yStart = 0; yEnd = SIZE; yStep = 1;
+  }
+
+  if (zGrav > 0) {
+    zStart = SIZE - 1; zEnd = -1; zStep = -1;
+  }
+  else if (zGrav < 0) {
+    zStart = 0; zEnd = SIZE; zStep = 1;
+  }
+
+  for(int x = xStart; x != xEnd; x += xStep){
+    for(int y = yStart; y != yEnd; y += yStep){
+      for(int z = zStart; z != zEnd; z += zStep){
         if(particles[x][y][z] == 1 && !moved[x][y][z]){
           updateParticleBasedOnGravity(x,y,z);
         }
       }
     }
   }
-
 }
 
-void updateParticle(int x, int y, int z){
-  //on ground (bottem of cube)
-  if(y == 0){
-    return;
+void validateParticleCount(){
+  int actualCount = 0;
+  for(int x = 0; x < SIZE; x++){
+    for(int y = 0; y < SIZE; y++){
+      for(int z = 0; z < SIZE; z++){
+        if(particles[x][y][z] == 1){
+          actualCount++ ;
+        }
+      }
+    }
   }
-  //in air
-  if(y >= 1 && particles[x][y-1][z] == 0){
-    moveParticle(x,y,z,x,y-1,z);
-    return;
-  }
-
-  //on particle, where to move
-  
-  //1
-  if(x > 0 && particles[x-1][y-1][z] == 0){
-    moveParticle(x,y,z,x-1,y-1,z);
-    return;
-  }
-  //2
-  else if(x < 7 && particles[x+1][y-1][z] == 0){
-    moveParticle(x,y,z,x+1,y-1,z);
-    return;
-  }
-  //3
-  else if(z > 0 && particles[x][y-1][z-1] == 0){
-    moveParticle(x,y,z,x,y-1,z-1);
-    return;
-  }
-  //4
-  else if(z < 7 && particles[x][y-1][z+1] == 0){
-    moveParticle(x,y,z,x,y-1,z+1);
-    return;
-  }
-  else{
-    //no open spot below, don't move
-    return;
+  if(actualCount != particleCount){
+    throw std::runtime_error("Incorrect Particle Count!");
   }
 }
 
@@ -206,41 +218,60 @@ bool isInBounds(int x, int y, int z){
   return true;
 }
 
-void updateParticleBasedOnGravity(int x, int y, int z){
+void updateMultiGravityParticle(int x, int y, int z){
 
-  moved[x][y][z] = true;
-
-  int possibleMoves[7][3];
+  int possibleMoves[8][3];
+  int scores[8];
   int moveCount = 0;
 
-  possibleMoves[moveCount][0] = x + xGrav;
-  possibleMoves[moveCount][1] = y + yGrav;
-  possibleMoves[moveCount][2] = z + zGrav;
-  moveCount++;
+  int xOptions[2] = {0, xGrav};
+  int yOptions[2] = {0, yGrav};
+  int zOptions[2] = {0, zGrav};
 
-  if(yGrav != 0){
-    possibleMoves[moveCount][0] = x - 1;       possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z;         moveCount++;
-    possibleMoves[moveCount][0] = x + 1;       possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z;         moveCount++;
-    possibleMoves[moveCount][0] = x;           possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z - 1;     moveCount++;
-    possibleMoves[moveCount][0] = x;           possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z + 1;     moveCount++;
-    possibleMoves[moveCount][0] = x - 1;       possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z - 1;     moveCount++;
-    possibleMoves[moveCount][0] = x + 1;       possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z + 1;     moveCount++;
+  int xCount = (xGrav == 0) ? 1 : 2;
+  int yCount = (yGrav == 0) ? 1 : 2;
+  int zCount = (zGrav == 0) ? 1 : 2;
+
+  for(int xi = 0; xi < xCount; xi++){
+    for(int yi = 0; yi < yCount; yi++){
+      for(int zi = 0; zi < zCount; zi++){
+        int dx = xOptions[xi];
+        int dy = yOptions[yi];
+        int dz = zOptions[zi];
+
+        if(dx == 0 && dy == 0 && dz == 0){
+          continue;
+        }
+
+        possibleMoves[moveCount][0] = x + dx;
+        possibleMoves[moveCount][1] = y + dy;
+        possibleMoves[moveCount][2] = z + dz;
+        scores[moveCount] = abs(dx) + abs(dy) + abs(dz);
+        moveCount++;
+      }
+    }
   }
-  else if(xGrav != 0){
-    possibleMoves[moveCount][0] = x + xGrav;   possibleMoves[moveCount][1] = y - 1;     possibleMoves[moveCount][2] = z;         moveCount++;
-    possibleMoves[moveCount][0] = x + xGrav;   possibleMoves[moveCount][1] = y + 1;     possibleMoves[moveCount][2] = z;         moveCount++;
-    possibleMoves[moveCount][0] = x + xGrav;   possibleMoves[moveCount][1] = y;         possibleMoves[moveCount][2] = z - 1;     moveCount++;
-    possibleMoves[moveCount][0] = x + xGrav;   possibleMoves[moveCount][1] = y;         possibleMoves[moveCount][2] = z + 1;     moveCount++;
-    possibleMoves[moveCount][0] = x + xGrav;   possibleMoves[moveCount][1] = y - 1;     possibleMoves[moveCount][2] = z - 1;     moveCount++;
-    possibleMoves[moveCount][0] = x + xGrav;   possibleMoves[moveCount][1] = y + 1;     possibleMoves[moveCount][2] = z + 1;     moveCount++;
-  }
-  else if(zGrav != 0){
-    possibleMoves[moveCount][0] = x - 1;       possibleMoves[moveCount][1] = y;         possibleMoves[moveCount][2] = z + zGrav; moveCount++;
-    possibleMoves[moveCount][0] = x + 1;       possibleMoves[moveCount][1] = y;         possibleMoves[moveCount][2] = z + zGrav; moveCount++;
-    possibleMoves[moveCount][0] = x;           possibleMoves[moveCount][1] = y - 1;     possibleMoves[moveCount][2] = z + zGrav; moveCount++;
-    possibleMoves[moveCount][0] = x;           possibleMoves[moveCount][1] = y + 1;     possibleMoves[moveCount][2] = z + zGrav; moveCount++;
-    possibleMoves[moveCount][0] = x - 1;       possibleMoves[moveCount][1] = y - 1;     possibleMoves[moveCount][2] = z + zGrav; moveCount++;
-    possibleMoves[moveCount][0] = x + 1;       possibleMoves[moveCount][1] = y + 1;     possibleMoves[moveCount][2] = z + zGrav; moveCount++;
+
+  for(int i = 0; i < moveCount - 1; i++){
+    for(int j = i + 1; j < moveCount; j++){
+      if(scores[j] > scores[i]){
+        int tempScore = scores[i];
+        scores[i] = scores[j];
+        scores[j] = tempScore;
+
+        int tempX = possibleMoves[i][0];
+        int tempY = possibleMoves[i][1];
+        int tempZ = possibleMoves[i][2];
+
+        possibleMoves[i][0] = possibleMoves[j][0];
+        possibleMoves[i][1] = possibleMoves[j][1];
+        possibleMoves[i][2] = possibleMoves[j][2];
+
+        possibleMoves[j][0] = tempX;
+        possibleMoves[j][1] = tempY;
+        possibleMoves[j][2] = tempZ;
+      }
+    }
   }
 
   for(int i = 0; i < moveCount; i++){
@@ -251,12 +282,99 @@ void updateParticleBasedOnGravity(int x, int y, int z){
     if(!isInBounds(nx, ny, nz)){
       continue;
     }
+
     if(particles[nx][ny][nz] == 0){
       moveParticle(x, y, z, nx, ny, nz);
       return;
     }
   }
 }
+
+void updateParticleBasedOnGravity(int x, int y, int z){
+
+  moved[x][y][z] = true;
+
+  int activeAxes = 0;
+  if(xGrav != 0) activeAxes++;
+  if(yGrav != 0) activeAxes++;
+  if(zGrav != 0) activeAxes++;
+
+
+  //if there is one axis we can do basic particle simulation with piling.
+  if(activeAxes <= 1){
+    updateSingleGravityParticle(x, y, z);
+  }
+  //if there is more then one axis active we need to alter the algorithm, it does not support piling, they
+  //just fall in the direction of the gravities
+  else{
+    updateMultiGravityParticle(x, y, z);
+  }
+}
+
+void updateSingleGravityParticle(int x, int y, int z){
+
+  int possibleMoves[9][3];
+  int moveCount = 0;
+
+  if(yGrav != 0){
+    possibleMoves[moveCount][0] = x;     possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z;     moveCount++;
+
+    possibleMoves[moveCount][0] = x - 1; possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z;     moveCount++;
+    possibleMoves[moveCount][0] = x + 1; possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z;     moveCount++;
+    possibleMoves[moveCount][0] = x;     possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z - 1; moveCount++;
+    possibleMoves[moveCount][0] = x;     possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z + 1; moveCount++;
+
+    possibleMoves[moveCount][0] = x - 1; possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z - 1; moveCount++;
+    possibleMoves[moveCount][0] = x - 1; possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z + 1; moveCount++;
+    possibleMoves[moveCount][0] = x + 1; possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z - 1; moveCount++;
+    possibleMoves[moveCount][0] = x + 1; possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z + 1; moveCount++;
+  }
+  else if(xGrav != 0){
+    possibleMoves[moveCount][0] = x + xGrav; possibleMoves[moveCount][1] = y;     possibleMoves[moveCount][2] = z;     moveCount++;
+
+    possibleMoves[moveCount][0] = x + xGrav; possibleMoves[moveCount][1] = y -1; possibleMoves[moveCount][2] = z;     moveCount++;
+    possibleMoves[moveCount][0] = x + xGrav; possibleMoves[moveCount][1] = y + 1; possibleMoves[moveCount][2] = z;     moveCount++;
+    possibleMoves[moveCount][0] = x + xGrav; possibleMoves[moveCount][1] = y;     possibleMoves[moveCount][2] = z - 1; moveCount++;
+    possibleMoves[moveCount][0] = x + xGrav; possibleMoves[moveCount][1] = y;     possibleMoves[moveCount][2] = z + 1; moveCount++;
+
+    possibleMoves[moveCount][0] = x + xGrav; possibleMoves[moveCount][1] = y - 1; possibleMoves[moveCount][2] = z - 1; moveCount++;
+    possibleMoves[moveCount][0] = x + xGrav; possibleMoves[moveCount][1] = y - 1; possibleMoves[moveCount][2] = z + 1; moveCount++;
+    possibleMoves[moveCount][0] = x + xGrav; possibleMoves[moveCount][1] = y + 1; possibleMoves[moveCount][2] = z - 1; moveCount++;
+    possibleMoves[moveCount][0] = x + xGrav; possibleMoves[moveCount][1] = y + 1; possibleMoves[moveCount][2] = z + 1; moveCount++;
+  }
+  else if(zGrav != 0){
+    possibleMoves[moveCount][0] = x;     possibleMoves[moveCount][1] = y;     possibleMoves[moveCount][2] = z + zGrav; moveCount++;
+
+    possibleMoves[moveCount][0] = x - 1; possibleMoves[moveCount][1] = y;     possibleMoves[moveCount][2] = z + zGrav; moveCount++;
+    possibleMoves[moveCount][0] = x + 1; possibleMoves[moveCount][1] = y;     possibleMoves[moveCount][2] = z + zGrav; moveCount++;
+    possibleMoves[moveCount][0] = x;     possibleMoves[moveCount][1] = y -1; possibleMoves[moveCount][2] = z + zGrav; moveCount++;
+    possibleMoves[moveCount][0] = x;     possibleMoves[moveCount][1] = y + 1; possibleMoves[moveCount][2] = z + zGrav; moveCount++;
+
+    possibleMoves[moveCount][0] = x - 1; possibleMoves[moveCount][1] = y - 1; possibleMoves[moveCount][2] = z + zGrav; moveCount++;
+    possibleMoves[moveCount][0] = x - 1; possibleMoves[moveCount][1] = y + 1; possibleMoves[moveCount][2] = z + zGrav; moveCount++;
+    possibleMoves[moveCount][0] = x + 1; possibleMoves[moveCount][1] = y - 1; possibleMoves[moveCount][2] = z + zGrav; moveCount++;
+    possibleMoves[moveCount][0] = x + 1; possibleMoves[moveCount][1] = y + 1; possibleMoves[moveCount][2] = z + zGrav; moveCount++;
+  }
+  else{
+    return;
+  }
+
+  for(int i = 0; i < moveCount; i++){
+    int nx = possibleMoves[i][0];
+    int ny = possibleMoves[i][1];
+    int nz = possibleMoves[i][2];
+
+    if(!isInBounds(nx, ny, nz)){
+      continue;
+    }
+
+    if(particles[nx][ny][nz] == 0){
+      moveParticle(x, y, z, nx, ny, nz);
+      return;
+    }
+  }
+}
+
 void moveParticle(int x1, int y1, int z1, int x2, int y2, int z2){
   if(particles[x2][y2][z2] == 1){
     throw std::runtime_error("Trying to move particle to non empty spot");
@@ -276,8 +394,12 @@ void createParticle(int x, int y, int z){
   if(particleCount >= MAX_PARTICLES){
     return;
   }
-  particles[x][y][z] = 1;
-  particleCount++;
+  if(particles[x][y][z] == 1){
+    return;
+  }
+    particles[x][y][z] = 1;
+    particleCount++;
+
 }
 
 void removeParticle(int x, int y, int z){
