@@ -1,13 +1,33 @@
 #include <Arduino.h>
 #include <SSD1306Wire.h>
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <FastLED.h>
+
+
+Adafruit_MPU6050 mpu;
 
 #define button1 34 // speed up button pin
 #define button2 0// direction button pin
 #define button3 35 // step mode button pin
+#define NUM_LEDS 320
+
+//ACCELEROMETER
+#define GPIO12 12
+
+
+//LEDS
+#define LED_PIN 13
+#define NUM_LEDS 64
+
+CRGB leds[NUM_LEDS];
 
 const int SIZE = 8;
 const int MAX_PARTICLES = 100;
 const int SPEED = 100;
+
+
 int particles[SIZE][SIZE][SIZE];
 int particleCount = 0;
 
@@ -22,7 +42,121 @@ int yGrav = -1;
 int xGrav = 0;
 int zGrav = 0 ;
 
+int panelIndex(int offset, int row, int col){
+  if(row % 2 == 0){
+    return offset + col + row * SIZE;
+  }
+  else{
+    return offset + (SIZE - 1 - col) + row * SIZE;
+  }
+}
+
+void updateScreen(int i){
+  int offset = (i - 1) * 64;
+
+  for (int row = 0; row < SIZE; row++) {
+    for (int col = 0; col < SIZE; col++) {
+      int visible = 0;
+
+      if(i == 1){
+        // top screen: x-z view
+        int z = row;
+        int x = col;
+
+        for (int y = 0; y < SIZE; y++) {
+          visible |= particles[x][y][z];
+        }
+      }
+      else if(i == 2){
+        // side screen 1: y-z view
+        int y = SIZE - 1 - row;
+        int z = col;
+
+        for (int x = 0; x < SIZE; x++) {
+          visible |= particles[x][y][z];
+        }
+      }
+      else if(i == 3){
+        // opposite y-z side
+        int y = SIZE - 1 - row;
+        int z = SIZE - 1 - col;
+
+        for (int x = 0; x < SIZE; x++) {
+          visible |= particles[x][y][z];
+        }
+      }
+      else if(i == 4){
+        // side screen 3: x-y view
+        int y = SIZE - 1 - row;
+        int x = col;
+
+        for (int z = 0; z < SIZE; z++) {
+          visible |= particles[x][y][z];
+        }
+      }
+      else if(i == 5){
+        // opposite x-y side
+        int y = SIZE - 1 - row;
+        int x = SIZE - 1 - col;
+
+        for (int z = 0; z < SIZE; z++) {
+          visible |= particles[x][y][z];
+        }
+      }
+
+      int index;
+      if (row % 2 == 0) {
+        index = offset + col + row * SIZE;
+      } else {
+        index = offset + (SIZE - 1 - col) + row * SIZE;
+      }
+
+      if (visible) {
+        leds[index] = CRGB(50, 0, 255);
+      } else {
+        leds[index] = CRGB(0, 0, 0);
+      }
+    }
+  }
+}
+void updateAllScreens(){
+  for(int i = 0; i <= 5; i++)
+}
+
+
+
+
+void initAccelerometer(){
+  Wire.begin(21, 22);
+
+  if (!mpu.begin()) {
+    Serial.println("Failed to find MPU6050");
+    while (1) {
+      delay(10);
+    }
+  }
+
+  mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+
+
+}
+
+
+void initLEDMatrix(){
+  FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.setBrightness(10);
+  FastLED.clear();
+  FastLED.show();
+}
+
+
+
 void setup() {
+  initAccelerometer();
+  initLEDMatrix();
+
   lcd.init();
   lcd.flipScreenVertically();
   lcd.setFont(ArialMT_Plain_16);
@@ -35,6 +169,8 @@ void setup() {
 }
 
 void loop() {
+  updateAllScreens();
+  checkGravity();
   checkInput();
   createParticle(4,7,4);
   simulateParticles();
@@ -44,6 +180,46 @@ void loop() {
   delay(SPEED);
 }
 
+void checkGravity(){
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+  float ax = a.acceleration.x;
+  float ay = a.acceleration.y;
+  float az = a.acceleration.z;
+
+  float threshold = 6.0;
+
+  if(ax > threshold){
+    xGrav = 1;
+  }
+  else if(ax < -threshold){
+    xGrav = -1;
+  }
+  else if(ax <threshold && ax > -threshold){
+    xGrav = 0;
+  }
+
+  if(ay > threshold){
+    yGrav = 1;
+  }
+  else if(ay < -threshold){
+    yGrav = -1;
+  }
+  else if(ay <threshold && ay > -threshold){
+    yGrav = 0;
+  }
+
+  if(az > threshold){
+    zGrav = 1;
+  }
+  else if(az < -threshold){
+    zGrav = -1;
+  }
+  else if(az <threshold && az > -threshold){
+    zGrav = 0;
+  }
+
+}
 
 void checkInput(){
    if(digitalRead(button1)==0){
