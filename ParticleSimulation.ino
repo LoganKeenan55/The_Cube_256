@@ -11,7 +11,6 @@ Adafruit_MPU6050 mpu;
 #define button1 34 // speed up button pin
 #define button2 0// direction button pin
 #define button3 35 // step mode button pin
-#define NUM_LEDS 320
 
 //ACCELEROMETER
 #define GPIO12 12
@@ -19,7 +18,8 @@ Adafruit_MPU6050 mpu;
 
 //LEDS
 #define LED_PIN 13
-#define NUM_LEDS 64
+#define NUM_LEDS 320
+
 
 CRGB leds[NUM_LEDS];
 
@@ -120,7 +120,11 @@ void updateScreen(int i){
   }
 }
 void updateAllScreens(){
-  for(int i = 0; i <= 5; i++)
+  FastLED.clear();
+  for(int i = 0; i <= 5; i++){
+    updateScreen(i);
+  }
+  FastLED.show();
 }
 
 
