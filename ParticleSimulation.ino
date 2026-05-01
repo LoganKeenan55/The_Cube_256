@@ -4,7 +4,8 @@
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include <FastLED.h>
-
+#include <cstdlib>
+#include <cmath>
 
 Adafruit_MPU6050 mpu;
 
@@ -15,7 +16,6 @@ Adafruit_MPU6050 mpu;
 //ACCELEROMETER
 #define GPIO12 12
 
-
 //LEDS
 #define LED_PIN 13
 #define NUM_LEDS 320
@@ -25,13 +25,19 @@ CRGB leds[NUM_LEDS];
 
 const int SIZE = 8;
 const int MAX_PARTICLES = 100;
-const int SPEED = 100;
+const int SPEED = 50;
 
 
 int particles[SIZE][SIZE][SIZE];
 int particleCount = 0;
 
+int currentColor = 0;
+int currentTime = 0;
+
+
 bool moved[SIZE][SIZE][SIZE];
+bool startupFinished = false;
+
 
 //screen on makerboard
 SSD1306Wire lcd(0x3C, SDA, SCL);
@@ -42,6 +48,52 @@ int yGrav = -1;
 int xGrav = 0;
 int zGrav = 0 ;
 
+
+void startupAnimation(){
+  for(int i = 0; i < NUM_LEDS; i++){
+    int r =  rand() % (255 + 1);
+    int g =  rand() % (255 + 1);
+    int b =  rand() % (255 + 1);
+    leds[i] = CRGB(r, g, b);
+    FastLED.show();
+    delay(5);
+  }
+  startupFinished = true;
+}
+
+CRGB getCurrentColor() {
+  switch (currentColor) {
+    case 0:
+      return CRGB(0,255,100);
+    case 1:
+      return CRGB(255, 50, 0);
+
+    case 2:
+      return CRGB(0, 255, 50);
+
+    case 3:
+      return CRGB(0, 50, 255);
+
+    case 4: {
+      int r = rand() % 256;
+      int g = rand() % 256;
+      int b = rand() % 256;
+      return CRGB(r, g, b);
+    }
+
+    case 5: {
+      int randomValue = rand() % 256;
+      return CRGB(randomValue, randomValue, randomValue);
+    }
+
+    case 6: {
+      double timeDivided = sin(currentTime % 34)*137;
+      return CRGB(timeDivided, 0, 0);
+    }
+
+  }
+}
+
 int panelIndex(int offset, int row, int col){
   if(row % 2 == 0){
     return offset + col + row * SIZE;
@@ -50,57 +102,67 @@ int panelIndex(int offset, int row, int col){
     return offset + (SIZE - 1 - col) + row * SIZE;
   }
 }
-
 void updateScreen(int i){
   int offset = (i - 1) * 64;
 
   for (int row = 0; row < SIZE; row++) {
     for (int col = 0; col < SIZE; col++) {
       int visible = 0;
+      int closest = -1;
 
       if(i == 1){
-        // top screen: x-z view
         int z = row;
         int x = col;
 
         for (int y = 0; y < SIZE; y++) {
-          visible |= particles[x][y][z];
+          if(particles[x][y][z]){
+            visible = 1;
+            if (y > closest) closest = y;
+          }
         }
       }
-      else if(i == 2){
-        // side screen 1: y-z view
-        int y = SIZE - 1 - row;
-        int z = col;
+    else if(i == 2){
+      int y = SIZE - 1 - row;
+      int z = SIZE - 1 - col;
 
-        for (int x = 0; x < SIZE; x++) {
-          visible |= particles[x][y][z];
+      for (int x = 0; x < SIZE; x++) {
+        if(particles[x][y][z]){
+          visible = 1;
+          if (x > closest) closest = x;
         }
       }
-      else if(i == 3){
-        // opposite y-z side
-        int y = SIZE - 1 - row;
-        int z = SIZE - 1 - col;
+    }
+    else if(i == 3){
+      int y = SIZE - 1 - row;
+      int z = col;
 
-        for (int x = 0; x < SIZE; x++) {
-          visible |= particles[x][y][z];
+      for (int x = 0; x < SIZE; x++) {
+        if(particles[x][y][z]){
+          visible = 1;
+          if (SIZE - 1 - x > closest) closest = SIZE - 1 - x;
         }
       }
+    }
       else if(i == 4){
-        // side screen 3: x-y view
         int y = SIZE - 1 - row;
         int x = col;
 
         for (int z = 0; z < SIZE; z++) {
-          visible |= particles[x][y][z];
+          if(particles[x][y][z]){
+            visible = 1;
+            if (z > closest) closest = z;
+          }
         }
       }
       else if(i == 5){
-        // opposite x-y side
         int y = SIZE - 1 - row;
         int x = SIZE - 1 - col;
 
         for (int z = 0; z < SIZE; z++) {
-          visible |= particles[x][y][z];
+          if(particles[x][y][z]){
+            visible = 1;
+            if (SIZE - 1 - z > closest) closest = SIZE - 1 - z;
+          }
         }
       }
 
@@ -112,7 +174,8 @@ void updateScreen(int i){
       }
 
       if (visible) {
-        leds[index] = CRGB(50, 0, 255);
+        int alpha = map(closest, 0, SIZE - 1, 5, 255);
+        leds[index] = getCurrentColor().nscale8(alpha);
       } else {
         leds[index] = CRGB(0, 0, 0);
       }
@@ -121,7 +184,7 @@ void updateScreen(int i){
 }
 void updateAllScreens(){
   FastLED.clear();
-  for(int i = 0; i <= 5; i++){
+  for(int i = 1; i <= 5; i++){
     updateScreen(i);
   }
   FastLED.show();
@@ -135,9 +198,7 @@ void initAccelerometer(){
 
   if (!mpu.begin()) {
     Serial.println("Failed to find MPU6050");
-    while (1) {
-      delay(10);
-    }
+
   }
 
   mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
@@ -160,7 +221,7 @@ void initLEDMatrix(){
 void setup() {
   initAccelerometer();
   initLEDMatrix();
-
+  
   lcd.init();
   lcd.flipScreenVertically();
   lcd.setFont(ArialMT_Plain_16);
@@ -170,26 +231,31 @@ void setup() {
   pinMode(button1, INPUT);
   pinMode(button2, INPUT);
   pinMode(button3, INPUT);
+  startupAnimation();
 }
 
 void loop() {
+  if(!startupFinished){
+    return;
+  }
   updateAllScreens();
   checkGravity();
   checkInput();
   createParticle(4,7,4);
-  simulateParticles();
+  simulateParticles(); 
   printThreeViews();
   //Serial.print(", ");
   //Serial.println(particles[6][0][4]);
+  currentTime++;
   delay(SPEED);
 }
 
 void checkGravity(){
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
-  float ax = a.acceleration.x;
-  float ay = a.acceleration.y;
-  float az = a.acceleration.z;
+  float ax = a.acceleration.x;   //remapped
+  float ay = -a.acceleration.z;  //remapped
+  float az = a.acceleration.y;   //remapped
 
   float threshold = 6.0;
 
@@ -227,11 +293,11 @@ void checkGravity(){
 
 void checkInput(){
    if(digitalRead(button1)==0){
-    if(xGrav <=0){
-      xGrav++;
+    if(currentColor <= 5){
+      currentColor++;
     }
     else{
-      xGrav = -1;
+      currentColor = 0;
     }
     delay(200); //debounce :D
    }
@@ -496,6 +562,7 @@ void updateSingleGravityParticle(int x, int y, int z){
   int possibleMoves[9][3];
   int moveCount = 0;
 
+  //THE ULTIMATE FORMULA
   if(yGrav != 0){
     possibleMoves[moveCount][0] = x;     possibleMoves[moveCount][1] = y + yGrav; possibleMoves[moveCount][2] = z;     moveCount++;
 
