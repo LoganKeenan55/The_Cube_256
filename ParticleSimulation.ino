@@ -6,6 +6,8 @@
 #include <FastLED.h>
 #include <cstdlib>
 #include <cmath>
+#include <WiFi.h>
+#include <WebServer.h>
 
 Adafruit_MPU6050 mpu;
 
@@ -20,12 +22,17 @@ Adafruit_MPU6050 mpu;
 #define LED_PIN 13
 #define NUM_LEDS 320
 
+//SERVER
+const char* ssid = "TheCube";
+const char* pass = "HelloWorld";
+WebServer server(80);
 
 CRGB leds[NUM_LEDS];
 
 const int SIZE = 8;
-const int MAX_PARTICLES = 100;
-const int SPEED = 50;
+const int MAX_PARTICLES = 180;
+const int SPEED = 25;
+int currentSpeed = SPEED;
 
 
 int particles[SIZE][SIZE][SIZE];
@@ -48,6 +55,154 @@ int yGrav = -1;
 int xGrav = 0;
 int zGrav = 0 ;
 
+
+
+String getCurrentColorHex() {
+  switch (currentColor) {
+    case 0: return "#00ff64";
+    case 1: return "#ff3200";
+    case 2: return "#00ff32";
+    case 3: return "#0032ff";
+    case 4: return "#ffffff";
+    case 5: return "#aaaaaa";
+    case 6: return "#ff0000";
+  }
+  return "#ffffff";
+}
+
+const char* controlPage = R"rawhtml(
+<!DOCTYPE html>
+<html>
+<head>
+  <title>The Cube</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root { --accent: #00ff64; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px;
+    }
+    h1 { color: var(--accent); }
+    .group { margin: 20px 0; text-align: center; }
+    .group h2 { margin-bottom: 10px; font-size: 16px; color: #aaa; }
+    .btn {
+      padding: 14px 28px;
+      margin: 6px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background: var(--accent);
+      color: #111;
+      font-weight: bold;
+    }
+    #status { margin-top: 24px; color: var(--accent); font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>The Cube&#8482;</h1>
+
+  <div class="group">
+    <h2>Color Mode</h2>
+    <button class="btn" onclick="cycleColor()">Next Color</button>
+  </div>
+
+  <div class="group">
+    <h2>Speed</h2>
+    <button class="btn" onclick="cmd('/speed/faster')">Faster</button>
+    <button class="btn" onclick="cmd('/speed/slower')">Slower</button>
+  </div>
+
+  <p id="status">Ready.</p>
+
+  <script>
+    function setAccent(hex) {
+      document.documentElement.style.setProperty('--accent', hex);
+    }
+
+    function cmd(path) {
+      fetch(path)
+        .then(r => r.text())
+        .then(msg => document.getElementById('status').innerText = msg)
+        .catch(() => document.getElementById('status').innerText = 'No response');
+    }
+
+    function cycleColor() {
+      fetch('/color/cycle')
+        .then(r => r.text())
+        .then(hex => {
+          setAccent(hex);
+          document.getElementById('status').innerText = 'Color changed!';
+        })
+        .catch(() => document.getElementById('status').innerText = 'No response');
+    }
+
+    fetch('/color/current')
+      .then(r => r.text())
+      .then(hex => setAccent(hex));
+  </script>
+</body>
+</html>
+)rawhtml";
+
+void on_home() {
+  server.send(200, "text/html", controlPage);
+}
+
+void on_color_cycle() {
+  if(currentColor <= 5){
+    currentColor++;
+  }
+  else{
+    currentColor = 0;
+  }
+  server.send(200, "text/plain", getCurrentColorHex());
+}
+
+void on_color_current() {
+  server.send(200, "text/plain", getCurrentColorHex());
+}
+
+void on_speed_faster() {
+  if(currentSpeed > 10){
+    currentSpeed -= 10;
+  }
+  char msg[40];
+  sprintf(msg, "Delay: %dms", currentSpeed);
+  server.send(200, "text/plain", msg);
+}
+
+void on_speed_slower() {
+  if(currentSpeed < 200){
+    currentSpeed += 10;
+  }
+  char msg[40];
+  sprintf(msg, "Delay: %dms", currentSpeed);
+  server.send(200, "text/plain", msg);
+}
+
+void initWiFiServer() {
+  Serial.println("Starting WiFi AP...");
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(ssid, pass);
+  Serial.print("AP IP: ");
+  Serial.println(WiFi.softAPIP());
+
+  server.on("/", on_home);
+  server.on("/color/cycle", on_color_cycle);
+  server.on("/color/current", on_color_current);
+  server.on("/speed/faster", on_speed_faster);
+  server.on("/speed/slower", on_speed_slower);
+  server.onNotFound([]() { server.send(404, "text/plain", "Not found"); });
+
+  server.begin();
+  Serial.println("Web server started.");
+}
 
 void startupAnimation(){
   for(int i = 0; i < NUM_LEDS; i++){
@@ -90,18 +245,13 @@ CRGB getCurrentColor() {
       double timeDivided = sin(currentTime % 34)*137;
       return CRGB(timeDivided, 0, 0);
     }
-
+    case 7:{
+      
+    }
   }
 }
 
-int panelIndex(int offset, int row, int col){
-  if(row % 2 == 0){
-    return offset + col + row * SIZE;
-  }
-  else{
-    return offset + (SIZE - 1 - col) + row * SIZE;
-  }
-}
+
 void updateScreen(int i){
   int offset = (i - 1) * 64;
 
@@ -174,7 +324,7 @@ void updateScreen(int i){
       }
 
       if (visible) {
-        int alpha = map(closest, 0, SIZE - 1, 5, 255);
+        int alpha = map(closest, 0, SIZE - 1, 0, 255);
         leds[index] = getCurrentColor().nscale8(alpha);
       } else {
         leds[index] = CRGB(0, 0, 0);
@@ -228,6 +378,7 @@ void setup() {
   lcd.clear();
   lcd.display();
   Serial.begin(115200);
+  initWiFiServer();
   pinMode(button1, INPUT);
   pinMode(button2, INPUT);
   pinMode(button3, INPUT);
@@ -235,6 +386,8 @@ void setup() {
 }
 
 void loop() {
+  server.handleClient();
+
   if(!startupFinished){
     return;
   }
@@ -247,7 +400,7 @@ void loop() {
   //Serial.print(", ");
   //Serial.println(particles[6][0][4]);
   currentTime++;
-  delay(SPEED);
+  delay(currentSpeed);
 }
 
 void checkGravity(){
