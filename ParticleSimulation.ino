@@ -31,8 +31,7 @@ CRGB leds[NUM_LEDS];
 
 const int SIZE = 8;
 const int MAX_PARTICLES = 180;
-const int SPEED = 25;
-int currentSpeed = SPEED;
+int currentSpeed = 25;
 
 
 int particles[SIZE][SIZE][SIZE];
@@ -394,7 +393,6 @@ void loop() {
   updateAllScreens();
   checkGravity();
   checkInput();
-  createParticle(4,7,4);
   simulateParticles(); 
   printThreeViews();
   //Serial.print(", ");
@@ -444,44 +442,47 @@ void checkGravity(){
 
 }
 
-void checkInput(){
-   if(digitalRead(button1)==0){
-    if(currentColor <= 5){
+void checkInput() {
+  static bool lastButton1 = HIGH;
+  static bool lastButton2 = HIGH;
+  static bool lastButton3 = HIGH;
+
+  bool b1 = digitalRead(button1);
+  bool b2 = digitalRead(button2);
+  bool b3 = digitalRead(button3);
+
+  if (lastButton1 == HIGH && b1 == LOW) {
+    if (currentColor <= 5) {
       currentColor++;
-    }
-    else{
+    } else {
       currentColor = 0;
     }
-    delay(200); //debounce :D
-   }
-   if(digitalRead(button2)==0){
-    if(yGrav <=0){
-      yGrav++;
-    }
-    else{
-      yGrav = -1;
-    }
-    delay(200); //debounce :D
-   }
-   if(digitalRead(button3)==0){
-    if(zGrav <=0){
-      zGrav++;
-    }
-    else{
-      zGrav = -1;
-    }
-    delay(200); //debounce :D
-   }
+  }
 
-    lcd.clear();
-    sprintf(text, "Xgrav: %d", xGrav);
-    lcd.drawString(0, 0, text);
-    sprintf(text, "Ygrav: %d", yGrav);
-    lcd.drawString(0, 16, text);
-    sprintf(text, "Zgrav: %d", zGrav);
-    lcd.drawString(0, 32, text);
-    lcd.display();
+  if (lastButton2 == HIGH && b2 == LOW) {
+    if (currentSpeed >= 100) {
+      currentSpeed = 5;
+    } else {
+      currentSpeed += 20;
+    }
+  }
 
+  if (b3 == LOW) {
+    createParticle(4, 7, 4);
+  }
+
+  lastButton1 = b1;
+  lastButton2 = b2;
+  lastButton3 = b3;
+
+  lcd.clear();
+  sprintf(text, "Xgrav: %d", xGrav);
+  lcd.drawString(0, 0, text);
+  sprintf(text, "Ygrav: %d", yGrav);
+  lcd.drawString(0, 16, text);
+  sprintf(text, "Zgrav: %d", zGrav);
+  lcd.drawString(0, 32, text);
+  lcd.display();
 }
 
 void printThreeViews()
